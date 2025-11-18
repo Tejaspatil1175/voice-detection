@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Analysis System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Voice Analysis System</h1>
+            <p>Upload or record audio to analyze emotion, vocal health, and more</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-card">
+                    <div class="upload-icon">🎤</div>
+                    <h2>Upload Audio File</h2>
+                    <input type="file" id="fileInput" accept="audio/*" style="display: none;">
+                    <button type="button" onclick="document.getElementById('fileInput').click()" class="btn btn-primary">
+                        Choose File
+                    </button>
+                    <p class="file-info" id="fileInfo">No file selected</p>
+                </div>
+
+                <div class="divider">OR</div>
+
+                <div class="record-card">
+                    <div class="record-icon">🎙️</div>
+                    <h2>Record Audio</h2>
+                    <button id="recordBtn" type="button" class="btn btn-secondary">
+                        Start Recording
+                    </button>
+                    <p class="record-info" id="recordInfo">Click to start recording</p>
+                </div>
+            </section>
+
+            <!-- Analysis Button -->
+            <div class="analyze-section">
+                <button id="analyzeBtn" type="button" class="btn btn-analyze" disabled>
+                    Analyze Voice
+                </button>
+                <div id="loadingSpinner" class="spinner" style="display: none;"></div>
+            </div>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="results-section" style="display: none;">
+                <h2>Analysis Results</h2>
+
+                <!-- Quick Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">😊</div>
+                        <div class="stat-label">Emotion</div>
+                        <div class="stat-value" id="emotionValue">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">❤️</div>
+                        <div class="stat-label">Vocal Health</div>
+                        <div class="stat-value" id="healthValue">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">😰</div>
+                        <div class="stat-label">Stress Level</div>
+                        <div class="stat-value" id="stressValue">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🎂</div>
+                        <div class="stat-label">Voice Age</div>
+                        <div class="stat-value" id="ageValue">-</div>
+                    </div>
+                </div>
+
+                <!-- Detailed Results -->
+                <div class="details-grid">
+                    <!-- Personality Analysis -->
+                    <div class="detail-card">
+                        <h3>🧠 Personality Traits</h3>
+                        <div id="personalityContent" class="content">
+                            <div class="trait-bar">
+                                <span>Extraversion</span>
+                                <div class="progress-bar">
+                                    <div id="extraversionBar" class="progress-fill"></div>
+                                </div>
+                                <span id="extraversionValue">0%</span>
+                            </div>
+                            <div class="trait-bar">
+                                <span>Emotional Stability</span>
+                                <div class="progress-bar">
+                                    <div id="stabilityBar" class="progress-fill"></div>
+                                </div>
+                                <span id="stabilityValue">0%</span>
+                            </div>
+                            <div class="trait-bar">
+                                <span>Openness</span>
+                                <div class="progress-bar">
+                                    <div id="opennessBar" class="progress-fill"></div>
+                                </div>
+                                <span id="opennessValue">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Issues Detected -->
+                    <div class="detail-card">
+                        <h3>⚠️ Issues Detected</h3>
+                        <div id="issuesContent" class="content">
+                            <ul id="issuesList"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Trigger Words -->
+                    <div class="detail-card">
+                        <h3>🔍 Trigger Words</h3>
+                        <div id="triggersContent" class="content">
+                            <div id="triggersList" class="tags"></div>
+                        </div>
+                    </div>
+
+                    <!-- Suggestions -->
+                    <div class="detail-card">
+                        <h3>💡 Suggestions</h3>
+                        <div id="suggestionsContent" class="content">
+                            <ul id="suggestionsList"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Early Illness Signals -->
+                    <div class="detail-card">
+                        <h3>🏥 Health Signals</h3>
+                        <div id="illnessContent" class="content">
+                            <ul id="illnessList"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Timeline -->
+                    <div class="detail-card full-width">
+                        <h3>📈 Emotion Timeline</h3>
+                        <div id="timelineContent" class="content">
+                            <div id="timelineChart"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Data (Collapsible) -->
+                <details class="raw-data">
+                    <summary>View Raw Data</summary>
+                    <pre id="rawData"></pre>
+                </details>
+            </section>
+        </main>
+
+        <footer>
+            <p>Voice Analysis System v1.0 | Powered by AI</p>
+        </footer>
+    </div>
+
+    <script src="script.js?v=20251118-2100"></script>
+</body>
+</html>
