@@ -35,6 +35,13 @@
                         Start Recording
                     </button>
                     <p class="record-info" id="recordInfo">Click to start recording</p>
+                    <div id="volumeMeter" style="display: none; margin-top: 15px;">
+                        <label style="font-size: 0.9rem; color: #666; display: block; margin-bottom: 5px;">Microphone Level:</label>
+                        <div style="width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden;">
+                            <div id="volumeBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4CAF50, #FFC107, #F44336); transition: width 0.1s;"></div>
+                        </div>
+                        <p id="volumeText" style="font-size: 0.85rem; color: #666; margin-top: 5px;">Speak into the microphone...</p>
+                    </div>
                 </div>
             </section>
 
@@ -49,6 +56,21 @@
             <!-- Results Section -->
             <section id="resultsSection" class="results-section" style="display: none;">
                 <h2>Analysis Results</h2>
+
+                <!-- Quality Warning -->
+                <div id="qualityWarning" class="quality-warning" style="display: none;">
+                    <div style="display: flex; align-items: start; gap: 10px;">
+                        <span style="font-size: 24px;">⚠️</span>
+                        <div>
+                            <h3 style="margin: 0 0 8px 0; color: #f57c00;">Analysis Quality Issues Detected</h3>
+                            <ul id="qualityIssues" style="margin: 0; padding-left: 20px; color: #666;">
+                            </ul>
+                            <p style="margin: 10px 0 0 0; font-size: 0.9rem; color: #666;">
+                                <strong>Tips for better results:</strong> Record for at least 5 seconds, speak clearly and naturally, ensure good microphone volume.
+                            </p>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Quick Stats -->
                 <div class="stats-grid">
@@ -172,6 +194,6 @@
         </footer>
     </div>
 
-    <script src="script.js?v=20251118-2100"></script>
+    <script src="script.js?v=20251119-0100"></script>
 </body>
 </html>

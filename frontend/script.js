@@ -1,9 +1,7 @@
 // API Configuration
 const API_URL = 'http://localhost:5000';
 
-alert('Voice Analysis Script v3.0 Loaded!'); // This should appear on page load
-
-console.log('Voice Analysis Script Loaded - Version 3.0');
+console.log('Voice Analysis Script Loaded - Version 3.1');
 console.log('API URL:', API_URL);
 
 // Global state
@@ -11,6 +9,10 @@ let selectedFile = null;
 let recordedBlob = null;
 let mediaRecorder = null;
 let audioChunks = [];
+let volumeMeterInterval = null;
+let audioContext = null;
+let analyser = null;
+let microphone = null;
 
 // DOM Elements
 const fileInput = document.getElementById('fileInput');
@@ -40,12 +42,24 @@ recordBtn.addEventListener('click', async () => {
         recordBtn.textContent = 'Start Recording';
         recordBtn.classList.remove('recording');
         recordInfo.textContent = 'Recording stopped';
+        document.getElementById('volumeMeter').style.display = 'none';
     } else {
         // Start recording
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Request high-quality audio with echo cancellation and noise suppression
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 44100
+                }
+            });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
+            
+            // Setup volume meter
+            setupVolumeMeter(stream);
 
             mediaRecorder.ondataavailable = (event) => {
                 audioChunks.push(event.data);
@@ -62,8 +76,11 @@ recordBtn.addEventListener('click', async () => {
                     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                     
+                    // Normalize audio to boost quiet recordings
+                    const normalizedBuffer = await normalizeAudio(audioBuffer, audioContext);
+                    
                     // Convert AudioBuffer to WAV
-                    recordedBlob = audioBufferToWav(audioBuffer);
+                    recordedBlob = audioBufferToWav(normalizedBuffer);
                     
                     selectedFile = null;
                     fileInfo.textContent = 'No file selected';
@@ -81,12 +98,16 @@ recordBtn.addEventListener('click', async () => {
                 
                 // Stop all tracks
                 stream.getTracks().forEach(track => track.stop());
+                
+                // Stop volume meter
+                stopVolumeMeter();
             };
 
             mediaRecorder.start();
             recordBtn.textContent = 'Stop Recording';
             recordBtn.classList.add('recording');
             recordInfo.textContent = 'Recording... Click to stop';
+            document.getElementById('volumeMeter').style.display = 'block';
         } catch (error) {
             console.error('Error accessing microphone:', error);
             alert('Could not access microphone. Please check permissions.');
@@ -208,6 +229,9 @@ function displayResults(data) {
     // Show results section
     resultsSection.style.display = 'block';
     resultsSection.scrollIntoView({ behavior: 'smooth' });
+    
+    // Check and display quality warnings
+    displayQualityWarnings(data);
 
     // Quick Stats
     document.getElementById('emotionValue').textContent = capitalizeFirst(data.emotion);
@@ -400,6 +424,158 @@ function floatTo16BitPCM(view, offset, input) {
 function writeString(view, offset, string) {
     for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
+    }
+}
+
+// Normalize audio to boost quiet recordings
+async function normalizeAudio(audioBuffer, audioContext) {
+    const offlineContext = new OfflineAudioContext(
+        audioBuffer.numberOfChannels,
+        audioBuffer.length,
+        audioBuffer.sampleRate
+    );
+    
+    const source = offlineContext.createBufferSource();
+    source.buffer = audioBuffer;
+    
+    // Find peak amplitude
+    let peak = 0;
+    for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        const data = audioBuffer.getChannelData(channel);
+        for (let i = 0; i < data.length; i++) {
+            const abs = Math.abs(data[i]);
+            if (abs > peak) peak = abs;
+        }
+    }
+    
+    // If audio is too quiet, boost it
+    if (peak < 0.1 && peak > 0) {
+        const targetPeak = 0.7; // Target 70% of max volume
+        const gain = offlineContext.createGain();
+        gain.gain.value = targetPeak / peak;
+        
+        source.connect(gain);
+        gain.connect(offlineContext.destination);
+        source.start();
+        
+        console.log(`Audio normalized: peak ${peak.toFixed(3)} -> gain ${gain.gain.value.toFixed(2)}x`);
+        return await offlineContext.startRendering();
+    }
+    
+    // Audio is fine, return original
+    console.log(`Audio peak: ${peak.toFixed(3)} (no normalization needed)`);
+    return audioBuffer;
+}
+
+// Setup volume meter for recording
+function setupVolumeMeter(stream) {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        
+        analyser.fftSize = 256;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        
+        microphone.connect(analyser);
+        
+        const volumeBar = document.getElementById('volumeBar');
+        const volumeText = document.getElementById('volumeText');
+        
+        volumeMeterInterval = setInterval(() => {
+            analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+            const percentage = Math.min(100, (average / 128) * 100);
+            
+            volumeBar.style.width = percentage + '%';
+            
+            if (percentage < 5) {
+                volumeText.textContent = '⚠️ Very quiet - speak louder!';
+                volumeText.style.color = '#f44336';
+            } else if (percentage < 20) {
+                volumeText.textContent = '⚠️ Too quiet - increase volume';
+                volumeText.style.color = '#ff9800';
+            } else if (percentage > 85) {
+                volumeText.textContent = '⚠️ Too loud - reduce volume';
+                volumeText.style.color = '#ff9800';
+            } else {
+                volumeText.textContent = '✓ Good level - keep speaking';
+                volumeText.style.color = '#4caf50';
+            }
+        }, 100);
+    } catch (error) {
+        console.error('Volume meter setup failed:', error);
+    }
+}
+
+// Stop volume meter
+function stopVolumeMeter() {
+    if (volumeMeterInterval) {
+        clearInterval(volumeMeterInterval);
+        volumeMeterInterval = null;
+    }
+    if (microphone) {
+        microphone.disconnect();
+        microphone = null;
+    }
+    if (analyser) {
+        analyser = null;
+    }
+}
+
+// Display quality warnings based on analysis results
+function displayQualityWarnings(data) {
+    const warningDiv = document.getElementById('qualityWarning');
+    const issuesList = document.getElementById('qualityIssues');
+    const issues = [];
+    
+    // Check duration
+    if (data.live_analysis && data.live_analysis.duration < 5) {
+        issues.push(`Recording too short (${data.live_analysis.duration}s) - at least 5 seconds recommended for accurate results`);
+    }
+    
+    // Check vocal health score as quality indicator
+    if (data.vocal_health_score < 30) {
+        issues.push('Very low audio quality detected - results may be inaccurate');
+    }
+    
+    // Check if age features are missing
+    if (data.age_features && Object.keys(data.age_features).length === 0) {
+        issues.push('Insufficient audio data for age estimation - recording may be too short or too quiet');
+    }
+    
+    // Check age confidence
+    if (data.age_confidence < 0.5) {
+        issues.push(`Low confidence in age estimation (${Math.round(data.age_confidence * 100)}%) - audio quality may be poor`);
+    }
+    
+    // Check emotion confidence
+    if (data.raw && data.raw.emotion && data.raw.emotion.confidence < 50) {
+        issues.push(`Low confidence in emotion detection (${data.raw.emotion.confidence}%) - try speaking more expressively`);
+    }
+    
+    // Check HNR (Harmonics-to-Noise Ratio)
+    if (data.raw && data.raw.health && data.raw.health.metrics) {
+        const hnr = data.raw.health.metrics.hnr;
+        if (hnr < 10 && hnr > 0) {
+            issues.push(`Poor audio signal quality (HNR: ${hnr.toFixed(1)} dB) - background noise or microphone issues detected`);
+        } else if (hnr <= 0) {
+            issues.push('Very poor audio quality - check microphone and reduce background noise');
+        }
+        
+        // Check pitch
+        if (data.raw.health.metrics.pitch_mean === 0) {
+            issues.push('No voice pitch detected - microphone may not be capturing audio properly');
+        }
+    }
+    
+    // Display warnings if any issues found
+    if (issues.length > 0) {
+        issuesList.innerHTML = issues.map(issue => `<li>${issue}</li>`).join('');
+        warningDiv.style.display = 'block';
+    } else {
+        warningDiv.style.display = 'none';
     }
 }
 

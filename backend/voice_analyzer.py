@@ -153,6 +153,14 @@ class VoiceAnalyzer:
             jitter = parselmouth.praat.call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
             shimmer = parselmouth.praat.call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
             
+            # Handle NaN values
+            if np.isnan(jitter) or np.isinf(jitter):
+                jitter = 0.005  # Use typical value
+            if np.isnan(shimmer) or np.isinf(shimmer):
+                shimmer = 0.03  # Use typical value
+            if np.isnan(hnr_mean) or np.isinf(hnr_mean):
+                hnr_mean = 15  # Use typical value
+            
             # Calculate health score (0-100)
             hnr_score = np.clip((hnr_mean + 10) / 30 * 100, 0, 100)
             jitter_score = np.clip((1 - jitter * 100) * 100, 0, 100)
@@ -181,14 +189,14 @@ class VoiceAnalyzer:
                     issues.append("High pitch variation - emotional stress")
             
             return {
-                'score': round(health_score, 2),
+                'score': round(float(health_score), 2) if not np.isnan(health_score) else 0,
                 'issues': issues,
                 'illness_signals': illness_signals,
                 'metrics': {
-                    'jitter': round(jitter, 4),
-                    'shimmer': round(shimmer, 4),
-                    'hnr': round(hnr_mean, 2),
-                    'pitch_mean': round(np.mean(pitch_values), 2) if len(pitch_values) > 0 else 0
+                    'jitter': round(float(jitter), 4) if not np.isnan(jitter) else 0,
+                    'shimmer': round(float(shimmer), 4) if not np.isnan(shimmer) else 0,
+                    'hnr': round(float(hnr_mean), 2) if not np.isnan(hnr_mean) else 0,
+                    'pitch_mean': round(float(np.mean(pitch_values)), 2) if len(pitch_values) > 0 and not np.isnan(np.mean(pitch_values)) else 0
                 }
             }
         except Exception as e:
@@ -412,6 +420,16 @@ class VoiceAnalyzer:
             # Feature 4: Shimmer (amplitude variation - increases with age)
             shimmer = parselmouth.praat.call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
             
+            # Handle NaN values
+            if np.isnan(jitter) or np.isinf(jitter):
+                jitter = 0.01
+            if np.isnan(shimmer) or np.isinf(shimmer):
+                shimmer = 0.05
+            if np.isnan(mean_pitch) or np.isinf(mean_pitch):
+                mean_pitch = 150
+            if np.isnan(pitch_std) or np.isinf(pitch_std):
+                pitch_std = 30
+            
             # Feature 5: Speaking rate approximation
             intensity = sound.to_intensity()
             intensity_values = intensity.values[0]
@@ -516,16 +534,16 @@ class VoiceAnalyzer:
             confidence = min(confidence, 1.0)
             
             return {
-                "age": int(round(estimated_age)),
-                "confidence": round(confidence, 2),
+                "age": int(round(float(estimated_age))) if not np.isnan(estimated_age) else 30,
+                "confidence": round(float(confidence), 2) if not np.isnan(confidence) else 0.5,
                 "gender": gender,
                 "features": {
-                    "mean_pitch": round(mean_pitch, 2),
-                    "pitch_variability": round(pitch_std, 2),
-                    "jitter": round(jitter, 4),
-                    "shimmer": round(shimmer, 4),
-                    "formant_f1": round(mean_f1, 2),
-                    "formant_f2": round(mean_f2, 2)
+                    "mean_pitch": round(float(mean_pitch), 2) if not np.isnan(mean_pitch) else 0,
+                    "pitch_variability": round(float(pitch_std), 2) if not np.isnan(pitch_std) else 0,
+                    "jitter": round(float(jitter), 4) if not np.isnan(jitter) else 0,
+                    "shimmer": round(float(shimmer), 4) if not np.isnan(shimmer) else 0,
+                    "formant_f1": round(float(mean_f1), 2) if not np.isnan(mean_f1) else 0,
+                    "formant_f2": round(float(mean_f2), 2) if not np.isnan(mean_f2) else 0
                 }
             }
             
