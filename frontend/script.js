@@ -219,6 +219,8 @@ function displayResults(data) {
     updatePersonalityBar('extraversion', data.personality_analysis.extraversion);
     updatePersonalityBar('stability', data.personality_analysis.emotional_stability);
     updatePersonalityBar('openness', data.personality_analysis.openness);
+    updatePersonalityBar('agreeableness', data.personality_analysis.agreeableness || 50);
+    updatePersonalityBar('conscientiousness', data.personality_analysis.conscientiousness || 50);
 
     // Issues Detected
     const issuesList = document.getElementById('issuesList');

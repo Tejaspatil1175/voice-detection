@@ -62,13 +62,18 @@ class VoiceAnalyzer:
             
             # 3. Stress Level
             print("  → Calculating stress level...")
-            result['stress_level'] = self._estimate_stress(emotion_data, health_data)
+            stress_data = self._estimate_stress(emotion_data, health_data)
+            result['stress_level'] = stress_data['score']
+            result['stress_level_category'] = stress_data['level']
+            result['stress_components'] = stress_data['components']
             
             # 4. Timeline Analysis
             print("  → Analyzing timeline...")
             timeline_data = self._analyze_timeline(audio_file)
             result['timeline_emotion'] = timeline_data['dominant']
             result['heatmap'] = timeline_data['heatmap']
+            result['emotion_timeline'] = timeline_data['timeline']
+            result['emotion_distribution'] = timeline_data.get('emotion_distribution', {})
             
             # 5. Trigger Words
             print("  → Detecting keywords...")
@@ -77,11 +82,23 @@ class VoiceAnalyzer:
             
             # 6. Voice Age
             print("  → Estimating voice age...")
-            result['voice_age'] = self._estimate_age(audio_file)
+            age_data = self._estimate_age(audio_file)
+            result['voice_age'] = age_data['age']
+            result['age_confidence'] = age_data['confidence']
+            result['detected_gender'] = age_data['gender']
+            result['age_features'] = age_data.get('features', {})
             
             # 7. Personality Analysis
             print("  → Analyzing personality...")
-            result['personality_analysis'] = self._analyze_personality(audio_file)
+            personality_data = self._analyze_personality(audio_file)
+            result['personality_analysis'] = {
+                'extraversion': personality_data['extraversion'],
+                'emotional_stability': personality_data['emotional_stability'],
+                'openness': personality_data['openness'],
+                'agreeableness': personality_data.get('agreeableness', 50),
+                'conscientiousness': personality_data.get('conscientiousness', 50)
+            }
+            result['personality_confidence'] = personality_data.get('confidence', 0.5)
             
             # 8. Suggestions
             print("  → Generating suggestions...")
@@ -179,54 +196,167 @@ class VoiceAnalyzer:
             return {'score': 0, 'issues': ['Analysis failed'], 'illness_signals': [], 'metrics': {}}
     
     def _estimate_stress(self, emotion_data, health_data):
-        """Calculate stress level (0-100)"""
+        """Calculate stress level using multiple physiological indicators"""
+        
+        # Base stress from emotion (0-100)
         stress_map = {
             'angry': 85,
-            'fearful': 75,
-            'disgusted': 65,
-            'sad': 55,
-            'surprised': 45,
-            'neutral': 25,
-            'happy': 15
+            'fearful': 80,
+            'disgusted': 70,
+            'sad': 60,
+            'surprised': 50,
+            'neutral': 30,
+            'happy': 20,
+            'calm': 15
         }
         
         emotion_stress = stress_map.get(emotion_data['emotion'].lower(), 50)
+        
+        # Health-based stress indicators
         health_stress = 100 - health_data['score']
         
-        return round((emotion_stress + health_stress) / 2, 2)
+        # Additional stress indicators from health metrics
+        metrics = health_data.get('metrics', {})
+        jitter = metrics.get('jitter', 0)
+        shimmer = metrics.get('shimmer', 0)
+        pitch_mean = metrics.get('pitch_mean', 150)
+        
+        # Voice tremor indicator (high jitter = high stress)
+        tremor_stress = 0
+        if jitter > 0.015:
+            tremor_stress = min((jitter - 0.015) * 2000, 30)
+        
+        # Voice instability (high shimmer = stress)
+        instability_stress = 0
+        if shimmer > 0.05:
+            instability_stress = min((shimmer - 0.05) * 500, 25)
+        
+        # Pitch-based stress (very high or very low can indicate stress)
+        pitch_stress = 0
+        if pitch_mean > 0:
+            # Normal ranges: Male 85-180 Hz, Female 165-255 Hz
+            if pitch_mean > 255 or pitch_mean < 85:
+                pitch_stress = 15
+            elif pitch_mean > 240 or pitch_mean < 100:
+                pitch_stress = 10
+        
+        # Weighted combination of all factors
+        total_stress = (
+            emotion_stress * 0.35 +      # 35% emotion
+            health_stress * 0.25 +        # 25% overall health
+            tremor_stress * 0.20 +        # 20% voice tremor
+            instability_stress * 0.15 +   # 15% instability
+            pitch_stress * 0.05           # 5% pitch abnormality
+        )
+        
+        # Clamp to 0-100 range
+        total_stress = np.clip(total_stress, 0, 100)
+        
+        # Determine stress level category
+        if total_stress < 30:
+            stress_level = "Low"
+        elif total_stress < 55:
+            stress_level = "Moderate"
+        elif total_stress < 75:
+            stress_level = "High"
+        else:
+            stress_level = "Very High"
+        
+        return {
+            "score": round(total_stress, 2),
+            "level": stress_level,
+            "components": {
+                "emotion": round(emotion_stress * 0.35, 2),
+                "health": round(health_stress * 0.25, 2),
+                "tremor": round(tremor_stress * 0.20, 2),
+                "instability": round(instability_stress * 0.15, 2),
+                "pitch": round(pitch_stress * 0.05, 2)
+            }
+        }
     
     def _analyze_timeline(self, audio_file):
-        """Analyze emotion timeline"""
+        """Analyze emotion timeline with actual segmentation and analysis"""
         try:
             y, sr = librosa.load(audio_file)
             duration = len(y) / sr
             
-            # Simple segmentation
-            segments = 5
+            # Dynamic segmentation based on duration
+            if duration < 5:
+                segments = 3
+            elif duration < 15:
+                segments = 5
+            else:
+                segments = min(10, int(duration / 3))  # Max 10 segments
+            
             segment_duration = duration / segments
             timeline = []
+            emotion_counts = {}
+            
+            # Create temporary directory for segments
+            import tempfile
+            temp_dir = tempfile.mkdtemp()
             
             for i in range(segments):
-                start_time = i * segment_duration
+                start_sample = int(i * segment_duration * sr)
+                end_sample = int((i + 1) * segment_duration * sr)
+                segment_audio = y[start_sample:end_sample]
+                
+                # Save segment temporarily
+                segment_path = os.path.join(temp_dir, f'segment_{i}.wav')
+                sf.write(segment_path, segment_audio, sr)
+                
+                # Analyze emotion for this segment
+                try:
+                    segment_emotion_results = self.emotion_model(segment_path)
+                    segment_emotion = segment_emotion_results[0]['label']
+                    segment_confidence = round(segment_emotion_results[0]['score'] * 100, 2)
+                except Exception as seg_error:
+                    print(f"Segment {i} emotion error: {seg_error}")
+                    segment_emotion = 'neutral'
+                    segment_confidence = 50
+                
+                # Count emotions for dominant calculation
+                emotion_counts[segment_emotion] = emotion_counts.get(segment_emotion, 0) + 1
+                
                 timeline.append({
-                    'time': f"{start_time:.1f}s",
-                    'emotion': 'neutral'  # Simplified for now
+                    'time': f"{i * segment_duration:.1f}s",
+                    'emotion': segment_emotion,
+                    'confidence': segment_confidence
                 })
+                
+                # Clean up segment file
+                try:
+                    os.remove(segment_path)
+                except:
+                    pass
+            
+            # Clean up temp directory
+            try:
+                os.rmdir(temp_dir)
+            except:
+                pass
+            
+            # Find dominant emotion
+            dominant_emotion = max(emotion_counts, key=emotion_counts.get) if emotion_counts else 'neutral'
             
             # Create heatmap data
             heatmap = {
                 'times': [t['time'] for t in timeline],
-                'emotions': [t['emotion'] for t in timeline]
+                'emotions': [t['emotion'] for t in timeline],
+                'confidences': [t['confidence'] for t in timeline]
             }
             
             return {
-                'dominant': 'neutral',
+                'dominant': dominant_emotion,
                 'timeline': timeline,
-                'heatmap': heatmap
+                'heatmap': heatmap,
+                'emotion_distribution': emotion_counts
             }
         except Exception as e:
             print(f"Timeline error: {e}")
-            return {'dominant': 'neutral', 'timeline': [], 'heatmap': {}}
+            import traceback
+            traceback.print_exc()
+            return {'dominant': 'neutral', 'timeline': [], 'heatmap': {}, 'emotion_distribution': {}}
     
     def _detect_keywords(self, audio_file):
         """Detect trigger words"""
@@ -239,64 +369,284 @@ class VoiceAnalyzer:
             return []
     
     def _estimate_age(self, audio_file):
-        """Estimate voice age"""
+        """Estimate voice age using multiple acoustic features"""
         try:
-            # Convert audio to compatible format for parselmouth
+            # Convert audio to compatible format
             audio_file = self._ensure_compatible_audio(audio_file)
             sound = parselmouth.Sound(audio_file)
+            
+            # Load with librosa for additional features
+            y, sr = librosa.load(audio_file)
+            
+            # Feature 1: Pitch analysis
             pitch = sound.to_pitch()
             pitch_values = pitch.selected_array['frequency']
             pitch_values = pitch_values[pitch_values > 0]
             
             if len(pitch_values) == 0:
-                return 30
+                return {"age": 30, "confidence": 0.3, "gender": "unknown"}
             
             mean_pitch = np.mean(pitch_values)
+            pitch_std = np.std(pitch_values)
             
-            # Simple heuristics
-            if mean_pitch > 200:
-                return 15  # Child/Teen
-            elif mean_pitch > 180:
-                return 25  # Young female
-            elif mean_pitch > 140:
-                return 30  # Adult female/Young male
-            elif mean_pitch > 110:
-                return 40  # Middle-aged
+            # Feature 2: Formant frequencies (vocal tract length indicator)
+            formants = sound.to_formant_burg()
+            f1_values = []
+            f2_values = []
+            
+            for i in range(formants.get_number_of_frames()):
+                f1 = formants.get_value_at_time(1, formants.get_time_from_frame_number(i + 1))
+                f2 = formants.get_value_at_time(2, formants.get_time_from_frame_number(i + 1))
+                if f1 and not np.isnan(f1):
+                    f1_values.append(f1)
+                if f2 and not np.isnan(f2):
+                    f2_values.append(f2)
+            
+            mean_f1 = np.mean(f1_values) if f1_values else 500
+            mean_f2 = np.mean(f2_values) if f2_values else 1500
+            
+            # Feature 3: Jitter (voice quality - increases with age)
+            point_process = parselmouth.praat.call(sound, "To PointProcess (periodic, cc)", 75, 600)
+            jitter = parselmouth.praat.call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+            
+            # Feature 4: Shimmer (amplitude variation - increases with age)
+            shimmer = parselmouth.praat.call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+            
+            # Feature 5: Speaking rate approximation
+            intensity = sound.to_intensity()
+            intensity_values = intensity.values[0]
+            intensity_threshold = np.mean(intensity_values) - np.std(intensity_values)
+            voiced_frames = np.sum(intensity_values > intensity_threshold)
+            speaking_rate = voiced_frames / len(intensity_values) if len(intensity_values) > 0 else 0.5
+            
+            # Feature 6: Spectral features
+            spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
+            
+            # Gender estimation (helps with age accuracy)
+            if mean_pitch > 165:
+                gender = "female"
+                gender_factor = 1.0
+            elif mean_pitch < 145:
+                gender = "male"
+                gender_factor = -1.0
             else:
-                return 55  # Older adult
+                gender = "unknown"
+                gender_factor = 0.0
+            
+            # Advanced age estimation algorithm
+            # Base age from pitch
+            if gender == "female":
+                if mean_pitch > 220:
+                    base_age = 12 + (240 - mean_pitch) / 4  # Children: 12-17
+                elif mean_pitch > 200:
+                    base_age = 18 + (220 - mean_pitch) / 2  # Young: 18-28
+                elif mean_pitch > 180:
+                    base_age = 28 + (200 - mean_pitch) / 2  # Adult: 28-38
+                else:
+                    base_age = 38 + (180 - mean_pitch) / 3  # Older: 38-52
+            elif gender == "male":
+                if mean_pitch > 200:
+                    base_age = 12 + (230 - mean_pitch) / 3  # Children: 12-22
+                elif mean_pitch > 130:
+                    base_age = 22 + (200 - mean_pitch) / 3  # Young adult: 22-45
+                elif mean_pitch > 110:
+                    base_age = 45 + (130 - mean_pitch) / 2  # Middle: 45-55
+                else:
+                    base_age = 55 + (110 - mean_pitch) / 2  # Older: 55-70
+            else:
+                # Unknown gender - use neutral calculation
+                if mean_pitch > 200:
+                    base_age = 15
+                elif mean_pitch > 160:
+                    base_age = 25
+                elif mean_pitch > 130:
+                    base_age = 35
+                else:
+                    base_age = 50
+            
+            # Adjust based on voice quality (jitter/shimmer increase with age)
+            quality_age_adjustment = 0
+            if jitter > 0.015:
+                quality_age_adjustment += 5
+            if jitter > 0.025:
+                quality_age_adjustment += 8
+            if shimmer > 0.06:
+                quality_age_adjustment += 5
+            if shimmer > 0.10:
+                quality_age_adjustment += 8
+            
+            # Adjust based on pitch variability
+            if pitch_std < 20:
+                quality_age_adjustment += 5  # Less variation = older
+            elif pitch_std > 60:
+                quality_age_adjustment -= 3  # More variation = younger
+            
+            # Adjust based on formants (vocal tract length)
+            if gender == "female" and mean_f1 < 700:
+                quality_age_adjustment += 5  # Lower formants = larger tract = older
+            elif gender == "male" and mean_f1 < 500:
+                quality_age_adjustment += 5
+            
+            # Adjust based on spectral features
+            if spectral_centroid < 1500:
+                quality_age_adjustment += 3  # Lower brightness = older
+            
+            # Calculate final age
+            estimated_age = base_age + quality_age_adjustment
+            
+            # Clamp to reasonable range
+            estimated_age = np.clip(estimated_age, 10, 80)
+            
+            # Calculate confidence based on feature consistency
+            confidence = 0.5  # Base confidence
+            
+            # Increase confidence if gender is clear
+            if gender in ["male", "female"]:
+                confidence += 0.2
+            
+            # Increase confidence if voice quality is clear
+            if 0.005 < jitter < 0.03 and 0.03 < shimmer < 0.12:
+                confidence += 0.15
+            
+            # Increase confidence if pitch is stable
+            if 10 < pitch_std < 70:
+                confidence += 0.15
+            
+            confidence = min(confidence, 1.0)
+            
+            return {
+                "age": int(round(estimated_age)),
+                "confidence": round(confidence, 2),
+                "gender": gender,
+                "features": {
+                    "mean_pitch": round(mean_pitch, 2),
+                    "pitch_variability": round(pitch_std, 2),
+                    "jitter": round(jitter, 4),
+                    "shimmer": round(shimmer, 4),
+                    "formant_f1": round(mean_f1, 2),
+                    "formant_f2": round(mean_f2, 2)
+                }
+            }
+            
         except Exception as e:
             print(f"Age estimation error: {e}")
-            return 30
+            return {"age": 30, "confidence": 0.2, "gender": "unknown", "features": {}}
     
     def _analyze_personality(self, audio_file):
-        """Basic personality analysis"""
+        """Enhanced personality analysis using multiple acoustic features"""
         try:
             y, sr = librosa.load(audio_file)
             
-            # Extract features with fallbacks
+            # Feature 1: Speaking rate and energy (Extraversion)
             try:
                 tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
             except (AttributeError, Exception) as e:
-                # Fallback if beat tracking fails (e.g., scipy.signal.hann issue)
-                print(f"Beat tracking failed, using fallback: {e}")
-                tempo = 120  # Default tempo
+                print(f"Beat tracking failed, using alternative: {e}")
+                # Alternative: use zero-crossing rate for tempo estimation
+                zcr = librosa.feature.zero_crossing_rate(y)
+                tempo = np.mean(zcr) * 1000  # Normalize to tempo-like range
             
             energy = np.mean(librosa.feature.rms(y=y))
-            spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
             
-            # Calculate traits (0-100) - ensure they're Python floats, not numpy types
-            extraversion = float(min((tempo / 200 * 50) + (energy * 1000), 100))
-            emotional_stability = float(max(100 - (energy * 500), 0))
-            openness = float(min(spectral_centroid / 40, 100))
+            # Feature 2: Pitch variation (Emotional expressiveness)
+            pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+            pitch_values = []
+            for t in range(pitches.shape[1]):
+                index = magnitudes[:, t].argmax()
+                pitch = pitches[index, t]
+                if pitch > 0:
+                    pitch_values.append(pitch)
+            
+            pitch_std = np.std(pitch_values) if len(pitch_values) > 0 else 20
+            pitch_mean = np.mean(pitch_values) if len(pitch_values) > 0 else 150
+            
+            # Feature 3: Spectral features
+            spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+            spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
+            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
+            
+            # Feature 4: MFCCs for voice quality
+            mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+            mfcc_mean = np.mean(mfccs, axis=1)
+            mfcc_std = np.std(mfccs, axis=1)
+            
+            # Feature 5: Pause analysis (speaking pattern)
+            rms = librosa.feature.rms(y=y)[0]
+            silence_threshold = np.mean(rms) * 0.3
+            silence_frames = np.sum(rms < silence_threshold)
+            speech_frames = len(rms) - silence_frames
+            speech_ratio = speech_frames / len(rms) if len(rms) > 0 else 0.5
+            
+            # Feature 6: Dynamic range
+            dynamic_range = np.max(rms) - np.min(rms) if len(rms) > 0 else 0
+            
+            # EXTRAVERSION (outgoing, energetic, talkative)
+            # Higher tempo, energy, speech ratio = more extraverted
+            tempo_score = min(tempo / 150 * 40, 40)  # Max 40 points
+            energy_score = min(energy * 500, 30)      # Max 30 points
+            speech_score = speech_ratio * 30         # Max 30 points
+            extraversion = tempo_score + energy_score + speech_score
+            extraversion = np.clip(extraversion, 0, 100)
+            
+            # EMOTIONAL STABILITY (calm, stable, consistent)
+            # Lower pitch variation, consistent energy = more stable
+            pitch_stability = max(100 - (pitch_std / 50 * 100), 0)
+            energy_stability = max(100 - (dynamic_range * 2000), 0)
+            mfcc_stability = max(100 - (np.mean(mfcc_std) * 10), 0)
+            emotional_stability = (pitch_stability * 0.4 + energy_stability * 0.3 + mfcc_stability * 0.3)
+            emotional_stability = np.clip(emotional_stability, 0, 100)
+            
+            # OPENNESS (creative, curious, expressive)
+            # Higher spectral complexity, pitch variation = more open
+            spectral_score = min(spectral_centroid / 30, 40)  # Max 40 points
+            bandwidth_score = min(spectral_bandwidth / 50, 30)  # Max 30 points
+            expressiveness = min(pitch_std / 30 * 30, 30)      # Max 30 points
+            openness = spectral_score + bandwidth_score + expressiveness
+            openness = np.clip(openness, 0, 100)
+            
+            # AGREEABLENESS (friendly, warm, cooperative)
+            # Moderate pitch, smooth tone, balanced energy
+            pitch_warmth = 100 - abs(pitch_mean - 180) / 2  # Optimal around 180Hz
+            tone_smoothness = max(100 - (np.mean(mfcc_std[:5]) * 15), 0)
+            agreeableness = (pitch_warmth * 0.5 + tone_smoothness * 0.5)
+            agreeableness = np.clip(agreeableness, 0, 100)
+            
+            # CONSCIENTIOUSNESS (organized, careful, deliberate)
+            # Consistent speaking rate, controlled energy, clear articulation
+            consistency = emotional_stability * 0.6  # Overlaps with stability
+            articulation = min(spectral_rolloff / 40, 40)  # Clear high frequencies
+            conscientiousness = consistency * 0.6 + articulation * 0.4
+            conscientiousness = np.clip(conscientiousness, 0, 100)
             
             return {
-                'extraversion': round(extraversion, 2),
-                'emotional_stability': round(emotional_stability, 2),
-                'openness': round(openness, 2)
+                'extraversion': round(float(extraversion), 2),
+                'emotional_stability': round(float(emotional_stability), 2),
+                'openness': round(float(openness), 2),
+                'agreeableness': round(float(agreeableness), 2),
+                'conscientiousness': round(float(conscientiousness), 2),
+                'confidence': 0.65,  # Moderate confidence for personality
+                'acoustic_features': {
+                    'tempo': round(float(tempo), 2),
+                    'energy': round(float(energy), 4),
+                    'pitch_std': round(float(pitch_std), 2),
+                    'speech_ratio': round(float(speech_ratio), 2),
+                    'spectral_centroid': round(float(spectral_centroid), 2)
+                }
             }
         except Exception as e:
             print(f"Personality analysis error: {e}")
-            return {'extraversion': 50, 'emotional_stability': 50, 'openness': 50}
+            import traceback
+            traceback.print_exc()
+            return {
+                'extraversion': 50,
+                'emotional_stability': 50,
+                'openness': 50,
+                'agreeableness': 50,
+                'conscientiousness': 50,
+                'confidence': 0.2,
+                'acoustic_features': {}
+            }
     
     def _generate_suggestions(self, result):
         """Generate health suggestions"""
