@@ -77,8 +77,13 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
-def index():
-    """Serve the main index.html page"""
+def landing():
+    """Serve the landing page"""
+    return send_from_directory('../frontend', 'landing.html')
+
+@app.route('/analytics')
+def analytics():
+    """Serve the analytics page"""
     return send_from_directory('../frontend', 'index.html')
 
 @app.route('/health', methods=['GET'])

@@ -5,12 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voice Analysis System</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Voice Analysis System</h1>
-            <p>Upload or record audio to analyze emotion, vocal health, and more</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto;">
+                <button onclick="window.location.href='/'" class="btn btn-secondary" style="padding: 10px 20px;">
+                    ← Back to Home
+                </button>
+                <div style="text-align: center; flex: 1;">
+                    <h1>Voice Analysis System</h1>
+                    <p>Upload or record audio to analyze emotion, vocal health, and more</p>
+                </div>
+                <div style="width: 140px;"></div> <!-- Spacer for centering -->
+            </div>
         </header>
 
         <main>
@@ -50,23 +59,70 @@
                 <button id="analyzeBtn" type="button" class="btn btn-analyze" disabled>
                     Analyze Voice
                 </button>
-                <div id="loadingSpinner" class="spinner" style="display: none;"></div>
+            </div>
+
+            <!-- Loading Animation -->
+            <div id="loadingSection" class="loading-section" style="display: none;">
+                <div class="loading-container">
+                    <div class="loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-ring"></div>
+                    </div>
+                    <h3 class="loading-title">Analyzing Your Voice...</h3>
+                    <div class="loading-steps">
+                        <div class="loading-step" id="step1">
+                            <div class="step-icon">🎵</div>
+                            <div class="step-text">Processing Audio</div>
+                            <div class="step-status">⏳</div>
+                        </div>
+                        <div class="loading-step" id="step2">
+                            <div class="step-icon">🎭</div>
+                            <div class="step-text">Detecting Emotions</div>
+                            <div class="step-status">⏳</div>
+                        </div>
+                        <div class="loading-step" id="step3">
+                            <div class="step-icon">🎤</div>
+                            <div class="step-text">Analyzing Vocal Health</div>
+                            <div class="step-status">⏳</div>
+                        </div>
+                        <div class="loading-step" id="step4">
+                            <div class="step-icon">💆</div>
+                            <div class="step-text">Measuring Stress Levels</div>
+                            <div class="step-status">⏳</div>
+                        </div>
+                        <div class="loading-step" id="step5">
+                            <div class="step-icon">🧠</div>
+                            <div class="step-text">Building Personality Profile</div>
+                            <div class="step-status">⏳</div>
+                        </div>
+                    </div>
+                    <div class="loading-progress">
+                        <div class="progress-bar-loading">
+                            <div id="progressFill" class="progress-fill-loading"></div>
+                        </div>
+                        <div class="progress-text"><span id="progressPercent">0</span>%</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Results Section -->
             <section id="resultsSection" class="results-section" style="display: none;">
-                <h2>Analysis Results</h2>
+                <div style="text-align: center; margin-bottom: 40px;">
+                    <h2 style="font-size: 2.5rem; background: linear-gradient(135deg, #667eea, #f093fb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 10px;">✨ Analysis Complete</h2>
+                    <p style="color: rgba(255, 255, 255, 0.7); font-size: 1.1rem;">Here's what we discovered about your voice</p>
+                </div>
 
                 <!-- Quality Warning -->
                 <div id="qualityWarning" class="quality-warning" style="display: none;">
                     <div style="display: flex; align-items: start; gap: 10px;">
                         <span style="font-size: 24px;">⚠️</span>
-                        <div>
-                            <h3 style="margin: 0 0 8px 0; color: #f57c00;">Analysis Quality Issues Detected</h3>
-                            <ul id="qualityIssues" style="margin: 0; padding-left: 20px; color: #666;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 8px 0; color: #f093fb; font-weight: 600;">Analysis Quality Issues Detected</h3>
+                            <ul id="qualityIssues" style="margin: 0; padding-left: 20px; color: rgba(255, 255, 255, 0.7);">
                             </ul>
-                            <p style="margin: 10px 0 0 0; font-size: 0.9rem; color: #666;">
-                                <strong>Tips for better results:</strong> Record for at least 5 seconds, speak clearly and naturally, ensure good microphone volume.
+                            <p style="margin: 10px 0 0 0; font-size: 0.9rem; color: rgba(255, 255, 255, 0.6);">
+                                <strong style="color: rgba(255, 255, 255, 0.8);">💡 Tips for better results:</strong> Record for at least 5 seconds, speak clearly and naturally, ensure good microphone volume.
                             </p>
                         </div>
                     </div>
@@ -90,53 +146,31 @@
                         <div class="stat-value" id="stressValue">-</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">🎂</div>
-                        <div class="stat-label">Voice Age</div>
-                        <div class="stat-value" id="ageValue">-</div>
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-label">Duration</div>
+                        <div class="stat-value" id="durationValue">-</div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-section">
+                    <div class="chart-card">
+                        <h3>📊 Emotion Distribution</h3>
+                        <canvas id="emotionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>💪 Stress Breakdown</h3>
+                        <canvas id="stressChart"></canvas>
                     </div>
                 </div>
 
                 <!-- Detailed Results -->
                 <div class="details-grid">
                     <!-- Personality Analysis -->
-                    <div class="detail-card">
+                    <div class="detail-card personality-card">
                         <h3>🧠 Personality Traits</h3>
-                        <div id="personalityContent" class="content">
-                            <div class="trait-bar">
-                                <span>Extraversion</span>
-                                <div class="progress-bar">
-                                    <div id="extraversionBar" class="progress-fill"></div>
-                                </div>
-                                <span id="extraversionValue">0%</span>
-                            </div>
-                            <div class="trait-bar">
-                                <span>Emotional Stability</span>
-                                <div class="progress-bar">
-                                    <div id="stabilityBar" class="progress-fill"></div>
-                                </div>
-                                <span id="stabilityValue">0%</span>
-                            </div>
-                            <div class="trait-bar">
-                                <span>Openness</span>
-                                <div class="progress-bar">
-                                    <div id="opennessBar" class="progress-fill"></div>
-                                </div>
-                                <span id="opennessValue">0%</span>
-                            </div>
-                            <div class="trait-bar">
-                                <span>Agreeableness</span>
-                                <div class="progress-bar">
-                                    <div id="agreeablenessBar" class="progress-fill"></div>
-                                </div>
-                                <span id="agreeablenessValue">0%</span>
-                            </div>
-                            <div class="trait-bar">
-                                <span>Conscientiousness</span>
-                                <div class="progress-bar">
-                                    <div id="conscientiousnessBar" class="progress-fill"></div>
-                                </div>
-                                <span id="conscientiousnessValue">0%</span>
-                            </div>
+                        <div class="chart-wrapper">
+                            <canvas id="personalityChart"></canvas>
                         </div>
                     </div>
 
@@ -175,9 +209,15 @@
                     <!-- Timeline -->
                     <div class="detail-card full-width">
                         <h3>📈 Emotion Timeline</h3>
-                        <div id="timelineContent" class="content">
-                            <div id="timelineChart"></div>
+                        <div class="chart-wrapper-timeline">
+                            <canvas id="timelineChart"></canvas>
                         </div>
+                    </div>
+
+                    <!-- Emotion Heatmap -->
+                    <div class="detail-card full-width">
+                        <h3>🔥 Emotion Confidence Heatmap</h3>
+                        <div id="heatmapContent" class="heatmap-container"></div>
                     </div>
                 </div>
 
