@@ -1,7 +1,16 @@
+// Import Google Generative AI SDK
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
 // API Configuration
 const API_URL = 'http://localhost:5000';
 
-console.log('Voice Analysis Script Loaded - Version 3.1');
+// ==================== GEMINI API CONFIGURATION ====================
+const GEMINI_API_KEY = 'AIzaSyDwYqJtNS0hbZ3C0Us2c7JbuL4gGw6YFTM';
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+// ==================================================================
+
+console.log('Voice Analysis Script Loaded - Version 3.2');
 console.log('API URL:', API_URL);
 
 // Global state
@@ -13,6 +22,7 @@ let volumeMeterInterval = null;
 let audioContext = null;
 let analyser = null;
 let microphone = null;
+let analysisData = null; // Store the complete analysis data for chatbot
 
 // DOM Elements
 const fileInput = document.getElementById('fileInput');
@@ -232,6 +242,9 @@ analyzeBtn.addEventListener('click', async (e) => {
 function displayResults(data) {
     console.log('Displaying results:', data);
     
+    // Store data globally for chatbot
+    analysisData = data;
+    
     // Show results section with fade-in animation
     resultsSection.style.display = 'block';
     resultsSection.style.opacity = '0';
@@ -256,6 +269,7 @@ function displayResults(data) {
     // Create Charts
     createEmotionChart(data);
     createStressChart(data);
+    createPitchChart(data);
     createPersonalityChart(data);
     createTimelineChart(data);
     createHeatmap(data);
@@ -271,20 +285,6 @@ function displayResults(data) {
         });
     } else {
         issuesList.innerHTML = '<li>No issues detected</li>';
-    }
-
-    // Trigger Words
-    const triggersList = document.getElementById('triggersList');
-    triggersList.innerHTML = '';
-    if (data.trigger_word_alert.length > 0) {
-        data.trigger_word_alert.forEach(word => {
-            const tag = document.createElement('span');
-            tag.className = 'tag';
-            tag.textContent = word;
-            triggersList.appendChild(tag);
-        });
-    } else {
-        triggersList.innerHTML = '<span style="color: #999;">No trigger words detected</span>';
     }
 
     // Suggestions
@@ -748,15 +748,15 @@ function createPersonalityChart(data) {
                     personality.agreeableness,
                     personality.conscientiousness
                 ],
-                backgroundColor: 'rgba(102, 126, 234, 0.2)',
-                borderColor: '#667eea',
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                borderColor: 'rgba(255, 255, 255, 0.9)',
                 borderWidth: 3,
-                pointBackgroundColor: '#667eea',
-                pointBorderColor: '#fff',
-                pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: '#667eea',
-                pointRadius: 5,
-                pointHoverRadius: 7
+                pointBackgroundColor: 'rgba(255, 255, 255, 0.9)',
+                pointBorderColor: '#667eea',
+                pointHoverBackgroundColor: '#667eea',
+                pointHoverBorderColor: '#fff',
+                pointRadius: 6,
+                pointHoverRadius: 8
             }]
         },
         options: {
@@ -766,8 +766,23 @@ function createPersonalityChart(data) {
                 r: {
                     beginAtZero: true,
                     max: 100,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.2)'
+                    },
+                    angleLines: {
+                        color: 'rgba(255, 255, 255, 0.2)'
+                    },
+                    pointLabels: {
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        font: {
+                            size: 13,
+                            weight: '600'
+                        }
+                    },
                     ticks: {
                         stepSize: 20,
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        backdropColor: 'transparent',
                         callback: function(value) {
                             return value + '%';
                         }
@@ -885,6 +900,237 @@ function createHeatmap(data) {
     });
 }
 
+// Create Pitch Chart
+function createPitchChart(data) {
+    const ctx = document.getElementById('pitchChart');
+    if (!ctx) return;
+    
+    // Simulate pitch data from timeline (in real app, this would come from audio analysis)
+    const timeline = data.live_analysis.timeline || [];
+    const pitchData = timeline.map((t, i) => {
+        // Simulate pitch values (in Hz) - higher emotions = higher pitch
+        const basePitch = 150;
+        const emotionFactor = {
+            'happy': 30,
+            'excited': 40,
+            'angry': 35,
+            'sad': -20,
+            'fear': 25,
+            'neutral': 0,
+            'surprise': 35
+        };
+        const factor = emotionFactor[t.emotion.toLowerCase()] || 0;
+        return basePitch + factor + (Math.random() * 20 - 10);
+    });
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: timeline.map(t => t.timestamp || `${t.time}s`),
+            datasets: [{
+                label: 'Pitch (Hz)',
+                data: pitchData,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#667eea',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: '#fff', font: { size: 12 } }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#667eea',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        label: (context) => `Pitch: ${context.parsed.y.toFixed(1)} Hz`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#fff', font: { size: 11 }, callback: (value) => value + ' Hz' }
+                },
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#fff', font: { size: 11 }, maxRotation: 45, minRotation: 45 }
+                }
+            },
+            animation: {
+                duration: 2000,
+                easing: 'easeInOutQuart'
+            }
+        }
+    });
+}
+
+// PDF Export Functionality
+function initializePDFExport() {
+    const exportBtn = document.getElementById('exportPdfBtn');
+    if (!exportBtn) return;
+    
+    exportBtn.addEventListener('click', async () => {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="50" stroke-dashoffset="0"><animateTransform attributeName="transform" type="rotate" from="0 10 10" to="360 10 10" dur="1s" repeatCount="indefinite"/></circle></svg> Generating PDF...';
+        
+        try {
+            await generatePDF();
+            exportBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg> PDF Downloaded!';
+            setTimeout(() => {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/></svg> Export Report as PDF';
+            }, 3000);
+        } catch (error) {
+            console.error('PDF generation error:', error);
+            alert('Failed to generate PDF. Please try again.');
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/></svg> Export Report as PDF';
+        }
+    });
+}
+
+async function generatePDF() {
+    // Check if jsPDF is loaded
+    if (!window.jspdf) {
+        alert('PDF library not loaded. Please refresh the page.');
+        throw new Error('jsPDF library not loaded');
+    }
+    
+    if (!analysisData) {
+        alert('No analysis data available. Please analyze a voice recording first.');
+        throw new Error('No analysis data available');
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 20;
+    let yPos = margin;
+    
+    // Header
+    pdf.setFillColor(102, 126, 234);
+    pdf.rect(0, 0, pageWidth, 40, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(24);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('Voice Analysis Report', margin, 25);
+    pdf.setFontSize(10);
+    pdf.setFont(undefined, 'normal');
+    pdf.text(`Generated: ${new Date().toLocaleString()}`, margin, 33);
+    
+    yPos = 55;
+    
+    // Summary Section
+    pdf.setTextColor(102, 126, 234);
+    pdf.setFontSize(16);
+    pdf.setFont(undefined, 'bold');
+    pdf.text('Summary', margin, yPos);
+    yPos += 10;
+    
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(11);
+    pdf.setFont(undefined, 'normal');
+    
+    if (analysisData) {
+        try {
+            const personality = analysisData.personality_analysis || analysisData.personality_traits || {};
+            const liveAnalysis = analysisData.live_analysis || {};
+            
+            const summaryLines = [
+                `Emotion: ${analysisData.emotion || 'N/A'} (${(analysisData.emotion_confidence || 0).toFixed(1)}% confidence)`,
+                `Vocal Health Score: ${(analysisData.vocal_health_score || 0).toFixed(1)}%`,
+                `Stress Level: ${(analysisData.stress_level || 0).toFixed(1)}%`,
+                `Duration: ${(liveAnalysis.duration || 0).toFixed(2)} seconds`,
+                ``,
+                `Personality Traits:`,
+                `  - Openness: ${(personality.openness || 0).toFixed(1)}%`,
+                `  - Conscientiousness: ${(personality.conscientiousness || 0).toFixed(1)}%`,
+                `  - Extraversion: ${(personality.extraversion || 0).toFixed(1)}%`,
+                `  - Agreeableness: ${(personality.agreeableness || 0).toFixed(1)}%`,
+                `  - Emotional Stability: ${(personality.emotional_stability || personality.neuroticism || 0).toFixed(1)}%`
+            ];
+        
+            summaryLines.forEach(line => {
+                pdf.text(line, margin, yPos);
+                yPos += 6;
+            });
+            
+            // Issues
+            if (analysisData.issues_detected && analysisData.issues_detected.length > 0) {
+                yPos += 5;
+                pdf.setTextColor(102, 126, 234);
+                pdf.setFont(undefined, 'bold');
+                pdf.text('Issues Detected:', margin, yPos);
+                yPos += 7;
+                pdf.setTextColor(0, 0, 0);
+                pdf.setFont(undefined, 'normal');
+                analysisData.issues_detected.forEach(issue => {
+                    pdf.text(`• ${issue}`, margin + 5, yPos);
+                    yPos += 6;
+                });
+            }
+            
+            // Suggestions
+            if (analysisData.suggestions && analysisData.suggestions.length > 0) {
+                yPos += 5;
+                pdf.setTextColor(102, 126, 234);
+                pdf.setFont(undefined, 'bold');
+                pdf.text('Suggestions:', margin, yPos);
+                yPos += 7;
+                pdf.setTextColor(0, 0, 0);
+                pdf.setFont(undefined, 'normal');
+                analysisData.suggestions.forEach(suggestion => {
+                    const lines = pdf.splitTextToSize(suggestion, pageWidth - 2 * margin - 5);
+                    lines.forEach(line => {
+                        if (yPos > pageHeight - margin) {
+                            pdf.addPage();
+                            yPos = margin;
+                        }
+                        pdf.text(`• ${line}`, margin + 5, yPos);
+                        yPos += 6;
+                    });
+                });
+            }
+        } catch (error) {
+            console.error('Error generating PDF content:', error);
+            pdf.setTextColor(255, 0, 0);
+            pdf.text('Error: Could not generate some PDF content', margin, yPos);
+        }
+    }
+    
+    // Footer
+    const totalPages = pdf.internal.pages.length - 1;
+    for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(128, 128, 128);
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+        pdf.text('Voice Analysis System v1.0', margin, pageHeight - 10);
+    }
+    
+    pdf.save(`voice-analysis-${new Date().getTime()}.pdf`);
+}
+
 // Check API Health on Load
 window.addEventListener('load', async () => {
     try {
@@ -978,3 +1224,299 @@ async function completeAllSteps() {
     // Hide loading section
     document.getElementById('loadingSection').style.display = 'none';
 }
+
+// AI Chatbot Functionality
+function initializeChatbot() {
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const chatbotToggle = document.getElementById('chatbotToggle');
+    const chatbotPanel = document.getElementById('chatbotPanel');
+    const minimizeChat = document.getElementById('minimizeChat');
+    const chatNotification = document.getElementById('chatNotification');
+    
+    if (!chatInput || !chatSendBtn) return;
+    
+    // Toggle chatbot panel
+    chatbotToggle.addEventListener('click', () => {
+        chatbotPanel.classList.toggle('open');
+        chatbotToggle.classList.toggle('active');
+        
+        const chatIcon = chatbotToggle.querySelector('.chat-icon');
+        const closeIcon = chatbotToggle.querySelector('.close-icon');
+        
+        if (chatbotPanel.classList.contains('open')) {
+            chatIcon.style.display = 'none';
+            closeIcon.style.display = 'block';
+            chatNotification.classList.add('hidden');
+        } else {
+            chatIcon.style.display = 'block';
+            closeIcon.style.display = 'none';
+        }
+    });
+    
+    // Minimize chat
+    minimizeChat.addEventListener('click', () => {
+        chatbotPanel.classList.remove('open');
+        chatbotToggle.classList.remove('active');
+        const chatIcon = chatbotToggle.querySelector('.chat-icon');
+        const closeIcon = chatbotToggle.querySelector('.close-icon');
+        chatIcon.style.display = 'block';
+        closeIcon.style.display = 'none';
+    });
+    
+    // Send message on button click
+    chatSendBtn.addEventListener('click', () => {
+        const message = chatInput.value.trim();
+        if (message) {
+            sendChatMessage(message);
+            chatInput.value = '';
+        }
+    });
+    
+    // Send message on Enter key
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const message = chatInput.value.trim();
+            if (message) {
+                sendChatMessage(message);
+                chatInput.value = '';
+            }
+        }
+    });
+}
+
+function askQuestion(question) {
+    sendChatMessage(question);
+}
+
+function sendChatMessage(message) {
+    const chatMessages = document.getElementById('chatMessages');
+    
+    // Add user message
+    const userMessageDiv = document.createElement('div');
+    userMessageDiv.className = 'chat-message user-message';
+    userMessageDiv.innerHTML = `
+        <div class="message-icon">👤</div>
+        <div class="message-content">
+            <p>${escapeHtml(message)}</p>
+        </div>
+    `;
+    chatMessages.appendChild(userMessageDiv);
+    
+    // Show typing indicator
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'chat-message bot-message typing-message';
+    typingDiv.innerHTML = `
+        <div class="message-icon">🤖</div>
+        <div class="message-content">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Generate AI response
+    setTimeout(async () => {
+        typingDiv.remove();
+        const response = await generateAIResponse(message);
+        addBotMessage(response);
+    }, 1000 + Math.random() * 1000);
+}
+
+async function generateAIResponse(question) {
+    const q = question.toLowerCase();
+    
+    // Handle general conversation without analysis data
+    if (!analysisData) {
+        // Check if it's a greeting or general chat
+        if (q.includes('hi') || q.includes('hello') || q.includes('hey')) {
+            return "Hello! 👋 I'm your AI voice analysis assistant. I can help you understand your voice patterns, emotions, and vocal health once you analyze a recording. Just click the microphone to record or upload an audio file to get started!";
+        }
+        if (q.includes('chat') || q.includes('talk') || q.includes('how are you')) {
+            return "I'd love to chat! 😊 I'm here to help you understand your voice analysis. To get started, please record or upload a voice sample, and then I can provide detailed insights about your emotions, vocal health, stress levels, and personality traits!";
+        }
+        if (q.includes('what can you do') || q.includes('help')) {
+            return "I can analyze your voice and tell you about:\n• Your emotional state and confidence\n• Vocal health metrics\n• Stress levels\n• Personality traits\n• Provide personalized suggestions\n\nTo begin, record or upload an audio sample!";
+        }
+        return "I don't have any analysis data yet. Please analyze a voice recording first, then I can answer your questions about the results! 🎤";
+    }
+    
+    // Try Gemini API first if we have analysis data
+    try {
+        const response = await callGeminiAPI(question);
+        if (response) return response;
+    } catch (error) {
+        console.error('Gemini API error:', error);
+        // Fall back to rule-based responses
+    }
+    
+    // Rule-based responses continue below
+    
+    // Emotion questions
+    if (q.includes('emotion') || q.includes('feeling') || q.includes('mood')) {
+        const emotion = analysisData.emotion;
+        const confidence = analysisData.emotion_confidence;
+        return `The primary emotion detected in your voice is **${emotion}** with ${confidence.toFixed(1)}% confidence. ${getEmotionInsight(emotion)}`;
+    }
+    
+    // Vocal health questions
+    if (q.includes('health') || q.includes('vocal') || q.includes('voice quality')) {
+        const health = analysisData.vocal_health_score;
+        const jitter = analysisData.vocal_health.jitter;
+        const shimmer = analysisData.vocal_health.shimmer;
+        return `Your vocal health score is **${health.toFixed(1)}%**. Jitter (voice stability): ${jitter.toFixed(3)}%, Shimmer (amplitude variation): ${shimmer.toFixed(3)}%. ${getHealthInsight(health)}`;
+    }
+    
+    // Stress questions
+    if (q.includes('stress') || q.includes('anxiety') || q.includes('tension')) {
+        const stress = analysisData.stress_level;
+        const components = analysisData.stress_components;
+        return `Your stress level is **${stress.toFixed(1)}%**. Breakdown: Pitch variance (${components.pitch_variance.toFixed(1)}%), Speaking rate (${components.speaking_rate.toFixed(1)}%), Energy fluctuation (${components.energy_fluctuation.toFixed(1)}%). ${getStressInsight(stress)}`;
+    }
+    
+    // Personality questions
+    if (q.includes('personality') || q.includes('trait')) {
+        const traits = analysisData.personality_traits;
+        const topTrait = Object.entries(traits).sort((a, b) => b[1] - a[1])[0];
+        return `Your personality analysis shows: Openness (${traits.openness.toFixed(1)}%), Conscientiousness (${traits.conscientiousness.toFixed(1)}%), Extraversion (${traits.extraversion.toFixed(1)}%), Agreeableness (${traits.agreeableness.toFixed(1)}%), Neuroticism (${traits.neuroticism.toFixed(1)}%). Your most prominent trait is **${topTrait[0]}** at ${topTrait[1].toFixed(1)}%.`;
+    }
+    
+    // Duration questions
+    if (q.includes('duration') || q.includes('long') || q.includes('time')) {
+        const duration = analysisData.live_analysis.duration;
+        return `The analyzed audio recording was **${duration.toFixed(2)} seconds** long.`;
+    }
+    
+    // Issues questions
+    if (q.includes('issue') || q.includes('problem') || q.includes('wrong')) {
+        const issues = analysisData.issues_detected;
+        if (issues.length > 0) {
+            return `I detected ${issues.length} issue(s): ${issues.map(i => `**${i}**`).join(', ')}. Check the Issues Detected section for more details.`;
+        }
+        return "Good news! No significant issues were detected in your voice analysis.";
+    }
+    
+    // Suggestions questions
+    if (q.includes('suggest') || q.includes('improve') || q.includes('recommendation')) {
+        const suggestions = analysisData.suggestions;
+        if (suggestions.length > 0) {
+            return `Here are my suggestions: ${suggestions.map((s, i) => `${i + 1}. ${s}`).join(' ')}`;
+        }
+        return "Your voice analysis looks good! Keep maintaining your current vocal habits.";
+    }
+    
+    // Timeline questions
+    if (q.includes('timeline') || q.includes('change') || q.includes('over time')) {
+        const timeline = analysisData.live_analysis.timeline;
+        if (timeline.length > 0) {
+            return `Your emotion fluctuated throughout the recording. It started with **${timeline[0].emotion}** and ended with **${timeline[timeline.length - 1].emotion}**. Check the timeline chart for detailed changes.`;
+        }
+    }
+    
+    // Summary/overview questions
+    if (q.includes('summary') || q.includes('overview') || q.includes('tell me about')) {
+        return `Here's a quick summary: **Emotion**: ${analysisData.emotion} (${analysisData.emotion_confidence.toFixed(1)}% confidence), **Vocal Health**: ${analysisData.vocal_health_score.toFixed(1)}%, **Stress Level**: ${analysisData.stress_level.toFixed(1)}%, **Duration**: ${analysisData.live_analysis.duration.toFixed(1)}s. Your voice shows ${analysisData.issues_detected.length === 0 ? 'no significant issues' : analysisData.issues_detected.length + ' issue(s)'}.`;
+    }
+    
+    // Default response
+    return `I can help you understand your voice analysis! Try asking about:\n• Your emotion and confidence level\n• Vocal health metrics\n• Stress levels and components\n• Personality traits\n• Detected issues or suggestions\n• Timeline of emotional changes\n\nWhat would you like to know?`;
+}
+
+// Gemini API Integration using Google Generative AI SDK
+async function callGeminiAPI(question) {
+    try {
+        let prompt;
+        
+        if (!analysisData) {
+            // General conversation mode
+            prompt = `You are a friendly AI voice analysis assistant. The user asked: "${question}". They haven't analyzed their voice yet. Respond in a helpful, friendly way (2-3 sentences) and encourage them to try the voice analysis feature.`;
+        } else {
+            // Analysis-based conversation mode
+            const personality = analysisData.personality_analysis || analysisData.personality_traits || {};
+            const promptParts = [
+                'You are an AI assistant for voice analysis. User data:',
+                'Emotion: ' + (analysisData.emotion || 'N/A') + ' (' + (analysisData.emotion_confidence || 0).toFixed(1) + '% confidence)',
+                'Vocal Health: ' + (analysisData.vocal_health_score || 0).toFixed(1) + '%',
+                'Stress Level: ' + (analysisData.stress_level || 0).toFixed(1) + '%',
+                'Duration: ' + ((analysisData.live_analysis && analysisData.live_analysis.duration) || 0).toFixed(2) + ' seconds',
+                'Personality: Openness ' + (personality.openness || 0).toFixed(1) + '%, Conscientiousness ' + (personality.conscientiousness || 0).toFixed(1) + '%, Extraversion ' + (personality.extraversion || 0).toFixed(1) + '%',
+                'Agreeableness ' + (personality.agreeableness || 0).toFixed(1) + '%, Emotional Stability ' + (personality.emotional_stability || 0).toFixed(1) + '%',
+                'Issues: ' + ((analysisData.issues_detected && analysisData.issues_detected.join(', ')) || 'None'),
+                'Suggestions: ' + ((analysisData.suggestions && analysisData.suggestions.slice(0, 2).join(', ')) || 'None'),
+                'Question: ' + question,
+                'Provide a helpful, friendly 2-3 sentence response.'
+            ];
+            prompt = promptParts.join(' | ');
+        }
+
+        const result = await geminiModel.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        
+        return text ? text.trim() : null;
+    } catch (error) {
+        console.error('Gemini API failed:', error);
+        return null;
+    }
+}
+
+function getEmotionInsight(emotion) {
+    const insights = {
+        'happy': 'This suggests a positive and upbeat state of mind. Great energy!',
+        'sad': 'Your voice indicates some melancholy. Consider activities that lift your mood.',
+        'angry': 'There are signs of frustration or anger. Try some relaxation techniques.',
+        'neutral': 'Your voice shows a calm, balanced emotional state.',
+        'fear': 'Your voice shows signs of anxiety or fear. Take deep breaths and relax.',
+        'surprise': 'Your voice indicates unexpectedness or astonishment.',
+        'disgust': 'Your voice shows signs of displeasure or aversion.'
+    };
+    return insights[emotion.toLowerCase()] || 'Keep monitoring your emotional patterns.';
+}
+
+function getHealthInsight(score) {
+    if (score >= 80) return '✅ Excellent! Your vocal health is in great shape.';
+    if (score >= 60) return '👍 Good vocal health. Keep maintaining it.';
+    if (score >= 40) return '⚠️ Moderate. Consider vocal exercises and hydration.';
+    return '⚠️ Needs attention. Consult a voice specialist if concerns persist.';
+}
+
+function getStressInsight(stress) {
+    if (stress < 30) return '✅ Low stress detected. You sound relaxed!';
+    if (stress < 60) return '⚠️ Moderate stress. Try relaxation techniques.';
+    return '🚨 High stress detected. Consider stress management practices.';
+}
+
+function addBotMessage(text) {
+    const chatMessages = document.getElementById('chatMessages');
+    const botMessageDiv = document.createElement('div');
+    botMessageDiv.className = 'chat-message bot-message';
+    
+    // Convert markdown-style bold to HTML
+    const formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    
+    botMessageDiv.innerHTML = `
+        <div class="message-icon">🤖</div>
+        <div class="message-content">
+            <p>${formattedText}</p>
+        </div>
+    `;
+    chatMessages.appendChild(botMessageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Initialize chatbot when page loads
+window.addEventListener('DOMContentLoaded', () => {
+    initializeChatbot();
+    initializePDFExport();
+});
+

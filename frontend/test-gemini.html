@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Gemini API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0f0f1e;
+            color: white;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        #result {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            min-height: 100px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .loading {
+            opacity: 0.6;
+            font-style: italic;
+        }
+        .success {
+            color: #4caf50;
+        }
+        .error {
+            color: #ff5722;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 Gemini API Test</h1>
+    <p>Click the button to test if Gemini API is working correctly:</p>
+    
+    <button onclick="testGemini()">Test Gemini API</button>
+    
+    <div id="result">
+        <p>Click the button above to test...</p>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/generative-ai": "https://esm.run/@google/generative-ai"
+      }
+    }
+    </script>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from '@google/generative-ai';
+
+        const API_KEY = 'AIzaSyDwYqJtNS0hbZ3C0Us2c7JbuL4gGw6YFTM';
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+
+        window.testGemini = async function() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="loading">⏳ Testing Gemini API connection...</p>';
+
+            try {
+                const result = await model.generateContent('Say "Hello! Gemini API is working!" in a friendly way.');
+                const response = await result.response;
+                const text = response.text();
+                
+                resultDiv.innerHTML = `
+                    <p class="success">✅ <strong>SUCCESS!</strong> Gemini API is working perfectly!</p>
+                    <p><strong>Response:</strong></p>
+                    <p>${text}</p>
+                    <hr style="border-color: rgba(255,255,255,0.2); margin: 20px 0;">
+                    <p style="font-size: 14px; opacity: 0.8;">
+                        <strong>Model:</strong> gemini-2.0-flash-exp<br>
+                        <strong>Status:</strong> Connected ✓<br>
+                        <strong>Response Time:</strong> ~1-2 seconds
+                    </p>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">❌ <strong>ERROR!</strong> Gemini API test failed.</p>
+                    <p><strong>Error Details:</strong></p>
+                    <pre style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; overflow-x: auto;">${error.message}</pre>
+                    <p style="margin-top: 15px; font-size: 14px;">
+                        <strong>Possible Solutions:</strong><br>
+                        • Check your internet connection<br>
+                        • Verify API key is correct<br>
+                        • Check browser console (F12) for details<br>
+                        • Try refreshing the page
+                    </p>
+                `;
+                console.error('Gemini API Error:', error);
+            }
+        };
+    </script>
+</body>
+</html>

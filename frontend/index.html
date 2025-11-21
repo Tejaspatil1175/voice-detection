@@ -152,6 +152,16 @@
                     </div>
                 </div>
 
+                <!-- Export Button -->
+                <div style="text-align: right; margin-bottom: 20px;">
+                    <button id="exportPdfBtn" class="btn btn-primary" style="padding: 12px 30px; display: inline-flex; align-items: center; gap: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/>
+                        </svg>
+                        Export Report as PDF
+                    </button>
+                </div>
+
                 <!-- Charts Section -->
                 <div class="charts-section">
                     <div class="chart-card">
@@ -161,6 +171,10 @@
                     <div class="chart-card">
                         <h3>💪 Stress Breakdown</h3>
                         <canvas id="stressChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>🎵 Voice Pitch Analysis</h3>
+                        <canvas id="pitchChart"></canvas>
                     </div>
                 </div>
 
@@ -179,14 +193,6 @@
                         <h3>⚠️ Issues Detected</h3>
                         <div id="issuesContent" class="content">
                             <ul id="issuesList"></ul>
-                        </div>
-                    </div>
-
-                    <!-- Trigger Words -->
-                    <div class="detail-card">
-                        <h3>🔍 Trigger Words</h3>
-                        <div id="triggersContent" class="content">
-                            <div id="triggersList" class="tags"></div>
                         </div>
                     </div>
 
@@ -234,6 +240,68 @@
         </footer>
     </div>
 
-    <script src="script.js?v=20251119-0100"></script>
+    <!-- Floating AI Assistant -->
+    <div id="chatbotWidget" class="chatbot-widget">
+        <button id="chatbotToggle" class="chatbot-toggle">
+            <svg class="chat-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12c0 1.54.36 3 .97 4.29L2 22l5.71-.97C9 21.64 10.46 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.38 0-2.68-.3-3.86-.84l-.27-.15-2.86.49.49-2.86-.15-.27C4.3 14.68 4 13.38 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8z"/>
+                <circle cx="9" cy="12" r="1"/>
+                <circle cx="12" cy="12" r="1"/>
+                <circle cx="15" cy="12" r="1"/>
+            </svg>
+            <svg class="close-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+            <div class="notification-badge" id="chatNotification">1</div>
+        </button>
+        
+        <div id="chatbotPanel" class="chatbot-panel">
+            <div class="chatbot-header">
+                <div class="header-info">
+                    <div class="bot-avatar">🤖</div>
+                    <div>
+                        <h4>AI Assistant</h4>
+                        <span class="status-indicator">● Online</span>
+                    </div>
+                </div>
+                <button id="minimizeChat" class="minimize-btn">_</button>
+            </div>
+            
+            <div id="chatMessages" class="chat-messages">
+                <div class="chat-message bot-message">
+                    <div class="message-icon">🤖</div>
+                    <div class="message-content">
+                        <p>Hi! I'm your AI voice analysis assistant. Ask me anything about your results!</p>
+                        <p class="message-suggestions">Try asking:</p>
+                        <ul class="quick-questions">
+                            <li onclick="askQuestion('What emotion was detected?')">What emotion was detected?</li>
+                            <li onclick="askQuestion('How is my vocal health?')">How is my vocal health?</li>
+                            <li onclick="askQuestion('What is my stress level?')">What is my stress level?</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <input type="text" id="chatInput" class="chat-input" placeholder="Ask me anything..." />
+                <button id="chatSendBtn" class="chat-send-btn">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M2 10L18 2L10 18L8 11L2 10Z" fill="currentColor"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/generative-ai": "https://esm.run/@google/generative-ai"
+      }
+    }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script type="module" src="script.js?v=20251119-0100"></script>
 </body>
 </html>
